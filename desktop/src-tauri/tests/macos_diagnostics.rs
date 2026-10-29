@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-#![cfg(target_os = "macos")]
+// These integration tests exercise the shared Unix process-group implementation.
+#![cfg(any(target_os = "macos", target_os = "linux"))]
 
 use powercontext_desktop::{
     diagnostics::{DiagnosticKind, LocalDiagnostics},
