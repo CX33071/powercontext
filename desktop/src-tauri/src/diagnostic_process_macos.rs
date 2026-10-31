@@ -163,15 +163,30 @@ pub(crate) fn run(
     timeout: Duration,
     cancelled: Arc<AtomicBool>,
 ) -> Result<Output, SafeError> {
-    let mut child = Command::new(executable)
+    let mut command = Command::new(executable);
+    command
         .args(arguments)
         .current_dir(std::env::temp_dir())
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .process_group(0)
-        .spawn()
-        .map_err(|_| SafeError::NotFound)?;
+        .process_group(0);
+    #[cfg(target_os = "linux")]
+    let mut spawn_attempts = 0;
+    let mut child = loop {
+        match command.spawn() {
+            Ok(child) => break child,
+            Err(error) => {
+                #[cfg(target_os = "linux")]
+                if error.raw_os_error() == Some(libc::ETXTBSY) && spawn_attempts < 20 {
+                    spawn_attempts += 1;
+                    std::thread::sleep(Duration::from_millis(5));
+                    continue;
+                }
+                return Err(SafeError::NotFound);
+            }
+        }
+    };
     let group = Group(child.id() as i32);
     let deadline = Instant::now() + timeout;
     let total = Arc::new(AtomicUsize::new(0));

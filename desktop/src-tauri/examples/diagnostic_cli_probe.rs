@@ -75,8 +75,61 @@ async fn main() {
         .run(DiagnosticKind::Integrations)
         .await
         .expect("real integrations projection");
-    assert!(service.items.iter().any(|v| v.field == "registration"));
-    assert!(!integrations.hosts.is_empty());
+    #[cfg(windows)]
+    {
+        assert!(
+            service
+                .items
+                .iter()
+                .any(|v| v.field == "registration" && v.status == "not_installed")
+        );
+        assert_eq!(integrations.hosts.len(), 10);
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let support = service
+            .items
+            .iter()
+            .find(|item| item.field == "support")
+            .expect("service support field");
+        assert!(matches!(
+            support.status.as_str(),
+            "supported" | "unsupported"
+        ));
+
+        let registration = service
+            .items
+            .iter()
+            .find(|item| item.field == "registration")
+            .expect("service registration field");
+        assert!(matches!(
+            registration.status.as_str(),
+            "installed" | "not_installed" | "unknown"
+        ));
+
+        let mut hosts: Vec<_> = integrations
+            .hosts
+            .iter()
+            .map(|host| host.host.as_str())
+            .collect();
+        hosts.sort_unstable();
+        assert_eq!(
+            hosts,
+            vec![
+                "claude-code",
+                "codex",
+                "dsh",
+                "hermes",
+                "kimi-code",
+                "openclaw",
+                "opencode",
+                "pi",
+                "workbuddy",
+                "zcode",
+            ]
+        );
+    }
     let mut legacy = registration.clone();
     legacy["version"] = "0.0.0".into();
     let legacy_path = invalid_directory.path().join("legacy.json");

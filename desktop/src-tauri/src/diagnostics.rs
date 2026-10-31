@@ -441,38 +441,38 @@ fn execute(
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     let snapshot_directory = tempfile::tempdir().map_err(|_| SafeError::Storage)?;
     #[cfg(any(target_os = "macos", target_os = "linux"))]
-    let snapshot_path = snapshot_directory.path().join("powercontext");
-    #[cfg(any(target_os = "macos", target_os = "linux"))]
-    let mut snapshot = std::fs::File::create(&snapshot_path).map_err(|_| SafeError::Storage)?;
-    #[cfg(any(target_os = "macos", target_os = "linux"))]
     let executable_path = {
         use std::io::Write;
         use std::os::unix::fs::PermissionsExt;
-        snapshot
-            .write_all(&verified.bytes)
-            .map_err(|_| SafeError::Storage)?;
-        snapshot
-            .set_permissions(std::fs::Permissions::from_mode(0o500))
-            .map_err(|_| SafeError::Storage)?;
-        snapshot_path.as_path()
+        let snapshot_path = snapshot_directory.path().join("powercontext");
+        {
+            let mut snapshot =
+                std::fs::File::create(&snapshot_path).map_err(|_| SafeError::Storage)?;
+            snapshot
+                .write_all(&verified.bytes)
+                .map_err(|_| SafeError::Storage)?;
+            snapshot.sync_all().map_err(|_| SafeError::Storage)?;
+            snapshot
+                .set_permissions(std::fs::Permissions::from_mode(0o500))
+                .map_err(|_| SafeError::Storage)?;
+        }
+        snapshot_path
     };
     #[cfg(windows)]
     let executable_path = config.executable.as_path();
-    #[cfg(any(target_os = "macos", target_os = "linux"))]
-    drop(snapshot);
     let timeout = match kind {
         DiagnosticKind::Service => 20,
         DiagnosticKind::Integrations => 60,
     };
     let result = crate::diagnostic_process::run(
-        executable_path,
+        &executable_path,
         kind.arguments(),
         Duration::from_secs(timeout),
         cancelled.clone(),
     )?;
     let mut report = project(kind, &result.stdout, result.exit_code)?;
     report.cli_version = crate::diagnostic_process::run(
-        executable_path,
+        &executable_path,
         &["--version"],
         Duration::from_secs(15),
         cancelled,
