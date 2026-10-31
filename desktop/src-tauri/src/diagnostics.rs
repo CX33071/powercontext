@@ -18,6 +18,7 @@
 use crate::error::SafeError;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::path::Path;
 use ts_rs::TS;
 
 pub const OUTPUT_LIMIT: usize = 256 * 1024;
@@ -460,19 +461,23 @@ fn execute(
     };
     #[cfg(windows)]
     let executable_path = config.executable.as_path();
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    let executable: &Path = executable_path.as_path();
+    #[cfg(windows)]
+    let executable: &Path = executable_path;
     let timeout = match kind {
         DiagnosticKind::Service => 20,
         DiagnosticKind::Integrations => 60,
     };
     let result = crate::diagnostic_process::run(
-        &executable_path,
+        executable,
         kind.arguments(),
         Duration::from_secs(timeout),
         cancelled.clone(),
     )?;
     let mut report = project(kind, &result.stdout, result.exit_code)?;
     report.cli_version = crate::diagnostic_process::run(
-        &executable_path,
+        executable,
         &["--version"],
         Duration::from_secs(15),
         cancelled,
